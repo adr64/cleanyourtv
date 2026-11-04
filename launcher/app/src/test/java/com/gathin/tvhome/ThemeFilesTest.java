@@ -29,6 +29,18 @@ public class ThemeFilesTest {
         assertFalse(ThemeFiles.collectionImage("captions.txt"));
     }
 
+    @Test public void themePackFilesAreAllowed() {
+        assertEquals("themes/cinematic/config.json",
+                ThemeFiles.path(Arrays.asList("themes", "cinematic", "config.json")));
+        assertEquals("themes/glass/title.txt",
+                ThemeFiles.path(Arrays.asList("themes", "glass", "title.txt")));
+        assertEquals("themes/minimal/wallpaper.jpg",
+                ThemeFiles.path(Arrays.asList("themes", "minimal", "wallpaper.jpg")));
+        assertNull(ThemeFiles.path(Arrays.asList("themes", "../x", "config.json")));
+        assertNull(ThemeFiles.path(Arrays.asList("themes", "bad name", "config.json")));
+        assertNull(ThemeFiles.path(Arrays.asList("themes", "cinematic", "notes.txt")));
+    }
+
     @Test public void anythingElseIsRefused() {
         assertNull(ThemeFiles.path(null));
         assertNull(ThemeFiles.path(Collections.emptyList()));

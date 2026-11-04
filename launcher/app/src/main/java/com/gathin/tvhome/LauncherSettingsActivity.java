@@ -9,7 +9,11 @@ import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.os.Bundle;
 import android.provider.Settings;
+import android.text.InputFilter;
+import android.text.InputType;
 import android.view.View;
+import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.TextView;
 import android.widget.LinearLayout;
 import android.widget.Toast;
@@ -34,7 +38,9 @@ public final class LauncherSettingsActivity extends Activity {
     private final TextView[] dockChoices = new TextView[DOCK_OPACITIES.length];
     private static final String[] CLOCK_FORMATS = {"system", "12", "24"};
     private final TextView[] clockChoices = new TextView[CLOCK_FORMATS.length];
+    private TextView themeChoice;
     private TextView wallpaperChoice;
+    private TextView greetingNameChoice;
     private TextView animationsChoice;
     private TextView advancedChoice;
     private TextView followThemeChoice;
@@ -123,8 +129,12 @@ public final class LauncherSettingsActivity extends Activity {
             reverseRow(dockChoices);
             reverseRow(clockChoices);
         }
+        themeChoice = findViewById(R.id.themeChoice);
+        themeChoice.setOnClickListener(v -> showThemePicker());
         wallpaperChoice = findViewById(R.id.wallpaperChoice);
         wallpaperChoice.setOnClickListener(v -> showWallpaperPicker());
+        greetingNameChoice = findViewById(R.id.greetingNameChoice);
+        greetingNameChoice.setOnClickListener(v -> showGreetingNameEditor());
         animationsChoice = findViewById(R.id.animationsChoice);
         animationsChoice.setOnClickListener(v -> {
             animations = !animations;
@@ -157,7 +167,8 @@ public final class LauncherSettingsActivity extends Activity {
             if (!hasOnTvChoices()) return;
             choices.edit().remove("columns").remove(Config.ROWS_BELOW_DOCK_KEY).remove("animations")
                     .remove("advanced_effects").remove(Config.WALLPAPER_CHOICE_KEY)
-                    .remove(Config.DOCK_OPACITY_KEY).remove(Config.CLOCK_FORMAT_KEY).remove(OpenOnStart.KEY).commit();
+                    .remove(Config.DOCK_OPACITY_KEY).remove(Config.CLOCK_FORMAT_KEY).remove(OpenOnStart.KEY)
+                    .remove(Config.GREETING_NAME_KEY).commit();
             Config current = Config.load(this);
             columns = current.columns;
             rowsBelowDock = current.rowsBelowDock;
@@ -173,7 +184,9 @@ public final class LauncherSettingsActivity extends Activity {
         findViewById(R.id.tvSettingsChoice).setOnClickListener(v ->
                 open(SystemSettings.intent(this, Settings.ACTION_SETTINGS)));
         refresh();
-        if (config.launcherSettingsButton) reorderChoice.requestFocus();
+        // Appearance first: theme when packs exist, otherwise wallpaper / columns.
+        if (!ThemePacks.list(this).isEmpty()) themeChoice.requestFocus();
+        else if (config.launcherSettingsButton) reorderChoice.requestFocus();
         else columnChoices[Math.max(0, Math.min(columns - 4, 3))].requestFocus();
     }
 
@@ -183,15 +196,101 @@ public final class LauncherSettingsActivity extends Activity {
         for (int i = views.length - 1; i >= 0; i--) row.addView(views[i]);
     }
 
+    private void showThemePicker() {
+        List<String> packs = ThemePacks.list(this);
+        if (packs.isEmpty()) {
+            Toast.makeText(this, R.string.theme_none, Toast.LENGTH_LONG).show();
+            return;
+        }
+        String[] labels = new String[packs.size()];
+        String current = ThemePacks.current(this);
+        int checked = 0;
+        for (int i = 0; i < packs.size(); i++) {
+            String name = packs.get(i);
+            String title = ThemePacks.label(this, name);
+            if (title.equals(name)) title = ThemePacks.displayName(name);
+            labels[i] = title;
+            if (name.equals(current)) checked = i;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.theme_label)
+                .setSingleChoiceItems(labels, checked, (dialog, which) -> {
+                    dialog.dismiss();
+                    String pack = packs.get(which);
+                    if (ThemePacks.apply(this, pack)) {
+                        Toast.makeText(this, R.string.theme_applied, Toast.LENGTH_SHORT).show();
+                        // Reload numbers from the new config.json so the chips match the pack.
+                        Config applied = Config.load(this);
+                        columns = applied.columns;
+                        rowsBelowDock = applied.rowsBelowDock;
+                        dockOpacity = applied.dockOpacity;
+                        clockFormat = applied.clockFormat;
+                        animations = applied.animations;
+                        advancedEffects = applied.animations && applied.advancedEffects;
+                        setResult(RESULT_OK);
+                        refresh();
+                    } else {
+                        Toast.makeText(this, R.string.not_available, Toast.LENGTH_LONG).show();
+                    }
+                })
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+    }
+
+    /** Shown after the greeting: the name saved on the TV, else the theme's; "" is the greeting alone. */
+    private String currentGreetingName() {
+        return Config.chosenGreetingName(choices.getString(Config.GREETING_NAME_KEY, null),
+                Config.load(this).greetingName);
+    }
+
+    /** A one-line text box (the TV's on-screen keyboard): OK saves, "No name" clears, Cancel keeps things. */
+    private void showGreetingNameEditor() {
+        EditText input = new EditText(this);
+        input.setSingleLine(true);
+        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_WORDS
+                | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+        input.setFilters(new InputFilter[]{new InputFilter.LengthFilter(Config.GREETING_NAME_MAX)});
+        input.setHint(R.string.greeting_name_label);
+        input.setText(currentGreetingName());
+        input.setSelection(input.getText().length());
+        // Side margins so the box does not touch the dialog's edge on the TV.
+        FrameLayout box = new FrameLayout(this);
+        int pad = Math.round(20 * getResources().getDisplayMetrics().density);
+        box.setPadding(pad, pad / 2, pad, 0);
+        box.addView(input, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT));
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle(R.string.greeting_name_label)
+                .setView(box)
+                .setPositiveButton(android.R.string.ok, (d, which) -> saveGreetingName(input.getText().toString()))
+                .setNeutralButton(R.string.greeting_name_clear, (d, which) -> saveGreetingName(""))
+                .setNegativeButton(android.R.string.cancel, null)
+                .create();
+        dialog.show();
+        input.requestFocus();
+    }
+
+    private void saveGreetingName(String typed) {
+        choices.edit().putString(Config.GREETING_NAME_KEY, Config.cleanGreetingName(typed)).apply();
+        changed();
+        Toast.makeText(this, R.string.greeting_name_applied, Toast.LENGTH_SHORT).show();
+        refresh();
+    }
+
     private void showWallpaperPicker() {
         File dir = Config.dir(this);
-        List<File> images = new java.util.ArrayList<>(WallpaperRotation.images(
-                dir == null ? null : new File(dir, "wallpapers")));
+        File wallpapersDir = dir == null ? null : new File(dir, "wallpapers");
+        List<File> images = new java.util.ArrayList<>(WallpaperRotation.images(wallpapersDir));
         // A theme with a single wallpaper.jpg offers that picture too (Config maps the choice back to it).
         File single = dir == null ? null : new File(dir, Config.WALLPAPER_NAME);
         if (single != null && single.isFile()) images.add(0, single);
+        java.util.Map<String, String> captions = WallpaperCaptions.read(wallpapersDir);
         String[] labels = new String[images.size() + 1];
-        for (int i = 0; i < images.size(); i++) labels[i] = images.get(i).getName();
+        for (int i = 0; i < images.size(); i++) {
+            String file = images.get(i).getName();
+            String caption = captions.get(file);
+            labels[i] = caption != null ? caption : file;
+        }
         labels[images.size()] = getString(R.string.wallpaper_none);
         String current = choices.getString(Config.WALLPAPER_CHOICE_KEY, null);
         int checked = "none".equals(current) ? images.size()
@@ -305,6 +404,21 @@ public final class LauncherSettingsActivity extends Activity {
         for (int i = 0; i < clockChoices.length; i++) {
             clockChoices[i].setSelected(CLOCK_FORMATS[i].equals(clockFormat));
         }
+        List<String> packs = ThemePacks.list(this);
+        String pack = ThemePacks.current(this);
+        String packLabel = pack.isEmpty() ? getString(R.string.theme_none)
+                : (packs.contains(pack) ? ThemePacks.displayName(pack) : pack);
+        if (!pack.isEmpty() && packs.contains(pack)) {
+            String titled = ThemePacks.label(this, pack);
+            packLabel = titled.equals(pack) ? ThemePacks.displayName(pack) : titled;
+        } else if (packs.isEmpty()) {
+            packLabel = getString(R.string.theme_none);
+        } else if (pack.isEmpty()) {
+            packLabel = getString(R.string.wallpaper_theme_default);
+        }
+        themeChoice.setText(getString(R.string.theme_state, packLabel));
+        themeChoice.setEnabled(!packs.isEmpty());
+        themeChoice.setAlpha(packs.isEmpty() ? 0.5f : 1f);
         animationsChoice.setText(getString(R.string.animations_state,
                 getString(animations ? R.string.on : R.string.off)));
         advancedChoice.setText(getString(R.string.advanced_effects_state,
@@ -312,10 +426,20 @@ public final class LauncherSettingsActivity extends Activity {
         advancedChoice.setEnabled(animations);
         advancedChoice.setAlpha(animations ? 1f : 0.5f);
         String wallpaperCurrent = choices.getString(Config.WALLPAPER_CHOICE_KEY, null);
-        wallpaperChoice.setText(getString(R.string.wallpaper_state,
-                "none".equals(wallpaperCurrent) ? getString(R.string.wallpaper_none)
-                        : wallpaperCurrent != null ? wallpaperCurrent
-                        : getString(R.string.wallpaper_theme_default)));
+        String wallpaperLabel = getString(R.string.wallpaper_theme_default);
+        if ("none".equals(wallpaperCurrent)) {
+            wallpaperLabel = getString(R.string.wallpaper_none);
+        } else if (wallpaperCurrent != null) {
+            File dir = Config.dir(this);
+            java.util.Map<String, String> captions = WallpaperCaptions.read(
+                    dir == null ? null : new File(dir, "wallpapers"));
+            String caption = captions.get(wallpaperCurrent);
+            wallpaperLabel = caption != null ? caption : wallpaperCurrent;
+        }
+        wallpaperChoice.setText(getString(R.string.wallpaper_state, wallpaperLabel));
+        String name = currentGreetingName();
+        greetingNameChoice.setText(getString(R.string.greeting_name_state,
+                name.isEmpty() ? getString(R.string.greeting_name_none) : name));
         openOnStartChoice.setText(getString(R.string.open_on_start_state, openOnStartLabel()));
         followThemeChoice.setSelected(!hasOnTvChoices());
     }
@@ -324,7 +448,8 @@ public final class LauncherSettingsActivity extends Activity {
         return choices.contains("columns") || choices.contains(Config.ROWS_BELOW_DOCK_KEY)
                 || choices.contains("animations") || choices.contains("advanced_effects")
                 || choices.contains(Config.WALLPAPER_CHOICE_KEY) || choices.contains(Config.DOCK_OPACITY_KEY)
-                || choices.contains(Config.CLOCK_FORMAT_KEY) || choices.contains(OpenOnStart.KEY);
+                || choices.contains(Config.CLOCK_FORMAT_KEY) || choices.contains(OpenOnStart.KEY)
+                || choices.contains(Config.GREETING_NAME_KEY);
     }
 
     private void open(Intent intent) {
