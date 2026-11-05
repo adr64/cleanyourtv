@@ -99,7 +99,9 @@ final class LibraryApps {
     }
 
     static boolean visible(boolean tvApp, boolean themeHidden, boolean explicitlyAdded, boolean removedFromHome) {
-        return !removedFromHome && (explicitlyAdded || (tvApp && !themeHidden));
+        // hidden_apps always wins: a theme that hides a package must not show it even if it was
+        // added from the App library (phone LAUNCHER entries such as Sony SetupTune).
+        return !removedFromHome && !themeHidden && (explicitlyAdded || tvApp);
     }
 
     /** The pill after the last Home row: show_library_pill false hides it only while the top-bar button is a way in. */

@@ -79,7 +79,7 @@ public class LibraryAppsTest {
         assertFalse(LibraryApps.visible(true, true, false));
         assertFalse(LibraryApps.visible(false, false, false));
         assertTrue(LibraryApps.visible(false, false, true));
-        assertTrue(LibraryApps.visible(true, true, true));
+        assertFalse(LibraryApps.visible(true, true, true));
     }
 
     @Test public void undoingAnAdditionRestoresDefaultVisibilityAndKeepsOtherChoices() {

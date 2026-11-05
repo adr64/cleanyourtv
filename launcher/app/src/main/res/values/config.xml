@@ -89,10 +89,14 @@
 
     <!-- A tile's name instead of the app's own: "package=Name". It also shows above the dock. -->
     <string-array name="app_labels">
+        <!-- Magis rebranded to Xuper; the APK label/banner still say Magis TV Oficial on older ATV. -->
+        <item>com.android.mgstv=Xuper TV</item>
     </string-array>
     <!-- A tile's artwork instead of the app's banner: "package=drawable", a banner_* drawable bundled with the
          launcher (res/drawable). banner_tv is a magenta field with the Live TV glyph. -->
     <string-array name="app_banners">
+        <!-- Private: 16:9 Xuper art; Magis still ships the old Magis TV Oficial leanback banner. -->
+        <item>com.android.mgstv=banner_xuper</item>
     </string-array>
 
     <!-- TVs with no TvInputManager have no HDMI list to read, but their own source-selection panel

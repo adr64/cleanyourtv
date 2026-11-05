@@ -131,9 +131,10 @@ final class ThemePacks {
         }
 
         SharedPreferences choices = ctx.getSharedPreferences(Config.SETTINGS_NAME, Context.MODE_PRIVATE);
+        // Keep wallpaper_choice: a re-push of the same collection should not drop the pick; a
+        // missing picture falls back to the theme in WallpaperRotation.chosen.
         choices.edit()
                 .putString(PREF_KEY, name)
-                .remove(Config.WALLPAPER_CHOICE_KEY)
                 .remove("advanced_effects")
                 .remove("animations")
                 .putLong(Config.SETTINGS_REVISION_KEY,
