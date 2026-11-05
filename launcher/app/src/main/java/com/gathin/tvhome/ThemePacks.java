@@ -3,6 +3,9 @@ package com.gathin.tvhome;
 import android.content.Context;
 import android.content.SharedPreferences;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -10,6 +13,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.UUID;
 
@@ -18,11 +22,32 @@ import java.util.UUID;
  * and optional {@code wallpaper.jpg} / {@code wallpapers/}. Applying one copies those files into
  * the active theme folder (the same place {@code tools/theme.sh} writes) and bumps
  * {@code theme_revision} so Home reloads.
+ *
+ * <p>A pack may only change the look. Device keys already on the TV (remote {@code app_keys},
+ * App library, greeting, Live TV package, hidden apps, …) are copied from the active
+ * {@code config.json} into the result, so picking Glass never drops the APPS button mapping.
  */
 final class ThemePacks {
     static final String ROOT = "themes";
     static final String PREF_KEY = "theme_pack";
     static final String TITLE_FILE = "title.txt";
+
+    /**
+     * Keys that stay with this TV when a look pack is applied. Pack values for these are ignored
+     * when the active theme already has the key.
+     */
+    private static final String[] KEEP_FROM_ACTIVE = {
+            "app_keys", "restore_key_services", "settings_keycodes", "settings_key_panel",
+            "input_key_keycodes",
+            "app_library", "library_excluded_apps", "library_apps",
+            "show_greeting", "greeting_name",
+            "hidden_apps", "dock_apps", "top_bar_apps",
+            "live_tv_package", "live_tv_action", "live_tv_input_id",
+            "inputs_connected_only", "launcher_settings_button",
+            "panel_service", "panel_action", "panel_extra",
+            "input_action", "input_sources", "input_uri_scheme",
+            "coocaa_sources", "package_map", "app_labels", "app_banners", "icon_tiles"
+    };
 
     private ThemePacks() { }
 
@@ -81,7 +106,9 @@ final class ThemePacks {
         boolean hasSingle = packWall.isFile();
 
         try {
-            copyFile(packConfig, new File(dest, Config.FILE_NAME));
+            // Look from the pack; remote / apps / greeting stay as this TV already had them.
+            writeUtf8(new File(dest, Config.FILE_NAME),
+                    mergeKeep(readJson(new File(dest, Config.FILE_NAME)), readJson(packConfig)).toString(2) + "\n");
             if (hasWallpapers || hasSingle) {
                 File wallpapers = new File(dest, "wallpapers");
                 if (wallpapers.isDirectory()) {
@@ -99,7 +126,7 @@ final class ThemePacks {
             }
             String revision = UUID.randomUUID().toString().replace("-", "");
             writeUtf8(new File(dest, "theme_revision"), revision);
-        } catch (IOException e) {
+        } catch (IOException | JSONException e) {
             return false;
         }
 
@@ -131,6 +158,37 @@ final class ThemePacks {
     private static void writeUtf8(File file, String text) throws IOException {
         try (FileOutputStream out = new FileOutputStream(file)) {
             out.write(text.getBytes(StandardCharsets.UTF_8));
+        }
+    }
+
+    /** Pack look keys, then re-apply every KEEP key still present on the active theme. */
+    static JSONObject mergeKeep(JSONObject active, JSONObject pack) throws JSONException {
+        JSONObject out = new JSONObject();
+        if (pack != null) {
+            for (Iterator<String> it = pack.keys(); it.hasNext(); ) {
+                String key = it.next();
+                out.put(key, pack.get(key));
+            }
+        }
+        if (active != null) {
+            for (String key : KEEP_FROM_ACTIVE) {
+                if (active.has(key)) out.put(key, active.get(key));
+            }
+        }
+        return out;
+    }
+
+    private static JSONObject readJson(File file) {
+        if (file == null || !file.isFile()) return null;
+        try (FileInputStream in = new FileInputStream(file)) {
+            byte[] buf = new byte[(int) Math.min(file.length(), 512 * 1024L)];
+            int n = in.read(buf);
+            if (n <= 0) return null;
+            String text = new String(buf, 0, n, StandardCharsets.UTF_8);
+            if (!text.isEmpty() && text.charAt(0) == '\uFEFF') text = text.substring(1);
+            return new JSONObject(text);
+        } catch (IOException | JSONException e) {
+            return null;
         }
     }
 
