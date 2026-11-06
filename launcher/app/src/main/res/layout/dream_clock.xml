@@ -5,7 +5,8 @@
     android:layout_height="match_parent"
     android:background="#FF000000">
 
-    <!-- The glow is its background; clock_wallpaper puts the picture in it, cropped like Home's. -->
+    <!-- The glow is its background; clock_wallpaper puts the picture in it, cropped like Home's.
+         dreamAmbientNext crossfades the next picture over it so rotation is not a hard cut. -->
     <ImageView
         android:id="@+id/dreamAmbient"
         android:layout_width="match_parent"
@@ -13,19 +14,72 @@
         android:scaleType="centerCrop"
         android:importantForAccessibility="no" />
 
+    <ImageView
+        android:id="@+id/dreamAmbientNext"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop"
+        android:alpha="0"
+        android:importantForAccessibility="no" />
+
+    <!-- Private BRAVIA mark: fixed top-right; outside dreamContent so the drifting clock leaves it alone. -->
+    <LinearLayout
+        android:id="@+id/brandMark"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|end"
+        android:layout_marginEnd="56dp"
+        android:layout_marginTop="28dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:focusable="false"
+        android:importantForAccessibility="no">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="SONY"
+            android:textColor="#8CFFFFFF"
+            android:textSize="12sp"
+            android:fontFamily="@string/font_medium"
+            android:letterSpacing="0.22"
+            android:textAllCaps="true" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:text="BRAVIA"
+            android:textColor="#8CFFFFFF"
+            android:textSize="12sp"
+            android:fontFamily="@string/font_medium"
+            android:letterSpacing="0.22"
+            android:textAllCaps="true" />
+    </LinearLayout>
+
     <LinearLayout
         android:id="@+id/dreamContent"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:orientation="vertical">
+        android:orientation="vertical"
+        android:gravity="center"
+        android:background="@drawable/dream_clock_glass"
+        android:clipChildren="false"
+        android:clipToPadding="false"
+        android:paddingStart="48dp"
+        android:paddingEnd="48dp"
+        android:paddingTop="20dp"
+        android:paddingBottom="26dp">
 
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
+            android:gravity="center_vertical"
             android:baselineAligned="true">
 
             <TextClock
+                android:id="@+id/dreamClock"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:format12Hour="h:mm"
@@ -37,6 +91,7 @@
                 android:includeFontPadding="false" />
 
             <TextClock
+                android:id="@+id/dreamAmPm"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="10dp"
@@ -50,10 +105,12 @@
         </LinearLayout>
 
         <TextClock
+            android:id="@+id/dreamDate"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="6dp"
-            android:layout_marginTop="4dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="6dp"
+            android:gravity="center"
             android:format12Hour="@string/date_format"
             android:format24Hour="@string/date_format"
             android:textColor="#8CFFFFFF"

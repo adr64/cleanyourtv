@@ -42,6 +42,29 @@ final class Config {
     static final String SETTINGS_NAME = "launcher_settings";
     static final String ROWS_BELOW_DOCK_KEY = "rows_below_dock";
     static final String WALLPAPER_CHOICE_KEY = "wallpaper_choice";
+    /** On-TV wallpaper choice that forces Home to rotate the collection. */
+    static final String WALLPAPER_CHOICE_ROTATE = "rotate";
+    /** Minutes between Home pictures when rotating: 1, 3, 5 or 10. Unset = theme. */
+    static final String HOME_WALLPAPER_ROTATION_MINUTES_KEY = "home_wallpaper_rotation_minutes";
+    /** Filenames under wallpapers/ excluded from Home rotation (SharedPreferences StringSet). */
+    static final String HOME_WALLPAPER_DISABLED_KEY = "home_wallpaper_disabled";
+    /** Allowed Home rotation intervals in Launcher settings. */
+    static final int[] HOME_WALLPAPER_ROTATION_MINUTES = {1, 3, 5, 10};
+    /** Clock screensaver wallpaper: home (match Home), pick (one file), or rotate (collection). */
+    static final String CLOCK_WALLPAPER_MODE_KEY = "clock_wallpaper_mode";
+    /** Filename under wallpapers/ when {@link #CLOCK_WALLPAPER_MODE_KEY} is pick. */
+    static final String CLOCK_WALLPAPER_PICK_KEY = "clock_wallpaper_pick";
+    /** Minutes between screensaver pictures when mode is rotate: 1, 3, 5 or 10. */
+    static final String CLOCK_WALLPAPER_ROTATION_MINUTES_KEY = "clock_wallpaper_rotation_minutes";
+    /** Filenames under wallpapers/ excluded from screensaver rotation (SharedPreferences StringSet). */
+    static final String CLOCK_WALLPAPER_DISABLED_KEY = "clock_wallpaper_disabled";
+    /**
+     * Idle minutes before the Home clock screensaver. Allowed: {@link #HOME_IDLE_MINUTES}.
+     * Unset means the theme's {@code home_idle_clock_minutes}.
+     */
+    static final String HOME_IDLE_MINUTES_KEY = "home_idle_minutes";
+    /** Choices offered in Launcher settings for {@link #HOME_IDLE_MINUTES_KEY}. */
+    static final int[] HOME_IDLE_MINUTES = {1, 3, 5, 10, 15};
     static final String DOCK_OPACITY_KEY = "dock_opacity";
     static final String CLOCK_FORMAT_KEY = "clock_format";
     /** The name after the greeting, typed in Launcher settings; it overrides a theme's greeting_name until Follow theme. */
@@ -676,31 +699,46 @@ final class Config {
         boolean wallpaperEnabled = json == null || bool(json, "wallpaper", true);
         if (!wallpaperEnabled) wallpaper = null;
         int rotationMinutes = json == null ? 0 : integer(json, "wallpaper_rotation_minutes", 0, 0, 1440);
+        rotationMinutes = chosenHomeRotationMinutes(choices.getInt(HOME_WALLPAPER_ROTATION_MINUTES_KEY, -1),
+                rotationMinutes);
         int wallpaperDim = json == null ? 0 : integer(json, "wallpaper_dim", 0, 0, 90);
         int dockOpacity = json == null ? 100 : integer(json, "dock_opacity", 100, 30, 100);
         dockOpacity = chosenDockOpacity(choices.getInt(DOCK_OPACITY_KEY, -1), dockOpacity);
         clockFormat = choices.getString(CLOCK_FORMAT_KEY, clockFormat);
+        idleClockMinutes = chosenIdleMinutes(choices.getInt(HOME_IDLE_MINUTES_KEY, -1), idleClockMinutes);
         // A name typed on the TV wins over the theme's; an empty one saved there means the greeting alone.
         greetingName = chosenGreetingName(choices.getString(GREETING_NAME_KEY, null), greetingName);
         String wallpaperOrder = json == null ? WallpaperRotation.ORDER_SHUFFLE
                 : string(json, "wallpaper_order", WallpaperRotation.ORDER_SHUFFLE);
         // An unknown order must not silently change how an existing collection rotates.
         if (!WallpaperRotation.validOrder(wallpaperOrder)) wallpaperOrder = WallpaperRotation.ORDER_SHUFFLE;
+        List<File> collection = dir == null ? Collections.emptyList()
+                : WallpaperRotation.images(new File(dir, "wallpapers"));
+        collection = WallpaperRotation.excluding(collection,
+                choices.getStringSet(HOME_WALLPAPER_DISABLED_KEY, Collections.emptySet()));
         List<File> wallpapers = new ArrayList<>();
-        if (rotationMinutes > 0 && dir != null && wallpaperEnabled) {
-            wallpapers.addAll(WallpaperRotation.images(new File(dir, "wallpapers")));
+        String wallpaperChoice = choices.getString(WALLPAPER_CHOICE_KEY, null);
+        boolean forceRotate = WALLPAPER_CHOICE_ROTATE.equals(wallpaperChoice);
+        if ((rotationMinutes > 0 || forceRotate) && wallpaperEnabled) {
+            wallpapers.addAll(collection);
+            if (forceRotate && rotationMinutes <= 0) rotationMinutes = HOME_WALLPAPER_ROTATION_MINUTES[0];
         }
         if (wallpapers.isEmpty() && wallpaper != null) wallpapers.add(wallpaper);
-        // An on-TV wallpaper pick overrides the theme: a filename from the wallpapers/
-        // collection, or "none". Unset means the theme decides (off by default).
-        String wallpaperChoice = choices.getString(WALLPAPER_CHOICE_KEY, null);
-        List<File> chosen = WallpaperRotation.chosen(dir == null ? Collections.emptyList()
-                : WallpaperRotation.images(new File(dir, "wallpapers")), wallpaper, wallpaperChoice);
-        if (chosen != null) {
-            wallpapers.clear();
-            wallpapers.addAll(chosen);
-            wallpaper = chosen.isEmpty() ? null : chosen.get(0);
-            wallpaperEnabled = !chosen.isEmpty();
+        // An on-TV wallpaper pick overrides the theme: a filename, "none", or "rotate".
+        // Unset means the theme decides (off by default).
+        if (!forceRotate) {
+            List<File> chosen = WallpaperRotation.chosen(dir == null ? Collections.emptyList()
+                    : WallpaperRotation.images(new File(dir, "wallpapers")), wallpaper, wallpaperChoice);
+            if (chosen != null) {
+                wallpapers.clear();
+                wallpapers.addAll(chosen);
+                wallpaper = chosen.isEmpty() ? null : chosen.get(0);
+                wallpaperEnabled = !chosen.isEmpty();
+                if (chosen.size() <= 1) rotationMinutes = 0;
+            }
+        } else {
+            wallpaper = wallpapers.isEmpty() ? null : wallpapers.get(0);
+            wallpaperEnabled = !wallpapers.isEmpty();
         }
         // A festive skin comes only from a theme; config.xml has no festival. seasonal_skin names one the same way
         // but launchers before it ignore the key, so a theme can carry it without older ones showing the diya skin.
@@ -766,18 +804,36 @@ final class Config {
             SharedPreferences.Editor editor = choices.edit();
             if (!"absent".equals(token)) editor.remove("columns").remove("animations")
                     .remove("advanced_effects").remove(ROWS_BELOW_DOCK_KEY)
-                    .remove(DOCK_OPACITY_KEY).remove(CLOCK_FORMAT_KEY).remove(GREETING_NAME_KEY);
+                    .remove(DOCK_OPACITY_KEY).remove(CLOCK_FORMAT_KEY).remove(GREETING_NAME_KEY)
+                    .remove(HOME_IDLE_MINUTES_KEY);
             editor.putString(THEME_SIGNATURE_KEY, signature).commit();
         } else if (!seen.equals(signature)) {
             choices.edit().remove("columns").remove("animations").remove("advanced_effects")
                     .remove(ROWS_BELOW_DOCK_KEY).remove(DOCK_OPACITY_KEY)
-                    .remove(CLOCK_FORMAT_KEY).remove(GREETING_NAME_KEY).putString(THEME_SIGNATURE_KEY, signature).commit();
+                    .remove(CLOCK_FORMAT_KEY).remove(GREETING_NAME_KEY).remove(HOME_IDLE_MINUTES_KEY)
+                    .putString(THEME_SIGNATURE_KEY, signature).commit();
         }
     }
 
     /** The dock band opacity chosen in Launcher settings, or the theme's when none (or an out-of-range one) is saved. */
     static int chosenDockOpacity(int chosen, int theme) {
         return chosen >= 30 && chosen <= 100 ? chosen : theme;
+    }
+
+    /** Idle minutes from Launcher settings when it is one of {@link #HOME_IDLE_MINUTES}, else the theme's. */
+    static int chosenIdleMinutes(int chosen, int theme) {
+        for (int minutes : HOME_IDLE_MINUTES) {
+            if (minutes == chosen) return chosen;
+        }
+        return theme;
+    }
+
+    /** Home rotation minutes from Launcher settings when allowed, else the theme's. */
+    static int chosenHomeRotationMinutes(int chosen, int theme) {
+        for (int minutes : HOME_WALLPAPER_ROTATION_MINUTES) {
+            if (minutes == chosen) return chosen;
+        }
+        return theme;
     }
 
     /**

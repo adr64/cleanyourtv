@@ -125,7 +125,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private long idleClockMs;
     /** Back on Home opens ClockActivity (config.xml, back_opens_clock). */
     private boolean backOpensClock;
-    private final Runnable showIdleClock = () -> startActivity(new Intent(this, ClockActivity.class));
+    private final Runnable showIdleClock = () -> {
+        startActivity(new Intent(this, ClockActivity.class));
+        overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
+    };
     private String liveTvAction;
     private String liveTvInputId;
     /** The app library is on (config.xml, app_library): only then can the tile menu take an app off Home. */
@@ -539,6 +542,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         greeting = findViewById(R.id.greeting);
         clockBlock = findViewById(R.id.leftBlock);
         clockRefresh = new ClockRefresh(clockBlock);
+        // Soft dark halo on Home labels (no glass box): stays readable on light wallpapers.
+        SoftText.apply(greeting, heroName, heroMeta,
+                findViewById(R.id.clock), findViewById(R.id.ampm), findViewById(R.id.date),
+                findViewById(R.id.shamsiDate), findViewById(R.id.lunarDate));
+        SoftText.applyChildren(findViewById(R.id.brandMark));
         greetingColor = greeting.getCurrentTextColor();
         if (!cfg.showGreeting) greeting.setVisibility(View.GONE);
         // Keep the other header layouts as designed: their extra lines change the block's centre.
@@ -1754,7 +1762,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     @SuppressWarnings("deprecation")
     public void onBackPressed() {
         // Home screen: Back goes nowhere, unless back_opens_clock is on.
-        if (backOpensClock) startActivity(new Intent(this, ClockActivity.class));
+        if (backOpensClock) {
+            startActivity(new Intent(this, ClockActivity.class));
+            overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
+        }
     }
 
     // ---- glass highlight -------------------------------------------------------------------------

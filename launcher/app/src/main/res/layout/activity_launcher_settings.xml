@@ -2,7 +2,7 @@
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#FF0B0F14"
+    android:background="#FF080B10"
     android:fillViewport="true">
 
     <LinearLayout
@@ -17,17 +17,20 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:fontFamily="@string/font_light"
+            android:letterSpacing="0.02"
             android:text="@string/launcher_settings"
             android:textColor="#FFFFFFFF"
-            android:textSize="34sp" />
+            android:textSize="32sp" />
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
+            android:fontFamily="@string/font_regular"
             android:text="@string/launcher_settings_subtitle"
-            android:textColor="#FF8B9AAB"
-            android:textSize="15sp" />
+            android:textColor="#99A8B8C8"
+            android:textSize="14sp" />
 
         <!-- Appearance: theme + wallpaper first (what people look for) -->
         <TextView
@@ -44,12 +47,47 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
+            android:fontFamily="@string/font_regular"
             android:text="@string/theme_hint"
-            android:textColor="#FF8B9AAB"
+            android:textColor="#88A8B8C8"
             android:textSize="13sp" />
 
         <TextView
             android:id="@+id/wallpaperChoice"
+            style="@style/SettingsRow"
+            android:layout_marginTop="12dp" />
+
+        <TextView
+            android:id="@+id/homeWallpaperRotationChoice"
+            style="@style/SettingsRow"
+            android:layout_marginTop="12dp"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/homeWallpaperImagesChoice"
+            style="@style/SettingsRow"
+            android:layout_marginTop="12dp"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/clockWallpaperChoice"
+            style="@style/SettingsRow"
+            android:layout_marginTop="12dp" />
+
+        <TextView
+            android:id="@+id/clockWallpaperRotationChoice"
+            style="@style/SettingsRow"
+            android:layout_marginTop="12dp"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/clockWallpaperImagesChoice"
+            style="@style/SettingsRow"
+            android:layout_marginTop="12dp"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/homeIdleChoice"
             style="@style/SettingsRow"
             android:layout_marginTop="12dp" />
 
@@ -62,8 +100,9 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
+            android:fontFamily="@string/font_regular"
             android:text="@string/greeting_name_hint"
-            android:textColor="#FF8B9AAB"
+            android:textColor="#88A8B8C8"
             android:textSize="13sp" />
 
         <TextView
@@ -76,8 +115,9 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
+            android:fontFamily="@string/font_regular"
             android:text="@string/follow_theme_hint"
-            android:textColor="#FF8B9AAB"
+            android:textColor="#88A8B8C8"
             android:textSize="13sp" />
 
         <!-- Layout -->
@@ -97,9 +137,10 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="14dp"
+            android:fontFamily="@string/font_medium"
             android:text="@string/columns_label"
-            android:textColor="#FFD0D7DE"
-            android:textSize="15sp" />
+            android:textColor="#CCD0D7DE"
+            android:textSize="14sp" />
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -117,9 +158,10 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="14dp"
+            android:fontFamily="@string/font_medium"
             android:text="@string/rows_below_dock_label"
-            android:textColor="#FFD0D7DE"
-            android:textSize="15sp" />
+            android:textColor="#CCD0D7DE"
+            android:textSize="14sp" />
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -137,9 +179,10 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="14dp"
+            android:fontFamily="@string/font_medium"
             android:text="@string/dock_opacity_label"
-            android:textColor="#FFD0D7DE"
-            android:textSize="15sp" />
+            android:textColor="#CCD0D7DE"
+            android:textSize="14sp" />
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -157,9 +200,10 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="14dp"
-            android:text="@string/dream_name"
-            android:textColor="#FFD0D7DE"
-            android:textSize="15sp" />
+            android:fontFamily="@string/font_medium"
+            android:text="@string/clock_format_label"
+            android:textColor="#CCD0D7DE"
+            android:textSize="14sp" />
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -192,8 +236,9 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
+            android:fontFamily="@string/font_regular"
             android:text="@string/advanced_effects_warning"
-            android:textColor="#FF8B9AAB"
+            android:textColor="#88A8B8C8"
             android:textSize="13sp" />
 
         <!-- System -->
@@ -218,8 +263,9 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
+            android:fontFamily="@string/font_regular"
             android:text="@string/home_settings_help"
-            android:textColor="#FF8B9AAB"
+            android:textColor="#88A8B8C8"
             android:textSize="13sp" />
 
         <TextView

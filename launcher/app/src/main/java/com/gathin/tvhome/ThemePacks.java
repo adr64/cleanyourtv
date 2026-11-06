@@ -64,23 +64,75 @@ final class ThemePacks {
         return names;
     }
 
-    /** Label shown in settings: {@code title.txt} if present, otherwise the folder name. */
+    /** Label shown in settings: {@code title.txt} first line if present, else {@link #displayName}. */
     static String label(Context ctx, String name) {
-        File title = new File(new File(Config.dir(ctx), ROOT), name + "/" + TITLE_FILE);
-        if (title.isFile()) {
-            try (FileInputStream in = new FileInputStream(title)) {
-                byte[] buf = new byte[120];
-                int n = in.read(buf);
-                if (n > 0) {
-                    String line = new String(buf, 0, n, StandardCharsets.UTF_8).trim();
-                    int cut = line.indexOf('\n');
-                    if (cut >= 0) line = line.substring(0, cut).trim();
-                    if (!line.isEmpty()) return line;
-                }
-            } catch (IOException ignored) {
+        String[] lines = titleLines(ctx, name);
+        if (lines.length > 0 && !lines[0].isEmpty()) return lines[0];
+        return displayName(name);
+    }
+
+    /**
+     * Short theme description for the apply confirmation: rest of {@code title.txt}, or a summary
+     * built from the pack's {@code config.json}.
+     */
+    static String blurb(Context ctx, String name) {
+        String[] lines = titleLines(ctx, name);
+        if (lines.length > 1) {
+            StringBuilder body = new StringBuilder();
+            for (int i = 1; i < lines.length; i++) {
+                if (lines[i].isEmpty()) continue;
+                if (body.length() > 0) body.append('\n');
+                body.append(lines[i]);
             }
+            if (body.length() > 0) return body.toString();
         }
-        return name;
+        File packConfig = new File(new File(Config.dir(ctx), ROOT), name + "/" + Config.FILE_NAME);
+        String fromJson = blurbFromConfig(readJson(packConfig));
+        return fromJson != null ? fromJson : "";
+    }
+
+    private static String[] titleLines(Context ctx, String name) {
+        File title = new File(new File(Config.dir(ctx), ROOT), name + "/" + TITLE_FILE);
+        if (!title.isFile()) return new String[0];
+        try (FileInputStream in = new FileInputStream(title)) {
+            byte[] buf = new byte[2048];
+            int n = in.read(buf);
+            if (n <= 0) return new String[0];
+            String text = new String(buf, 0, n, StandardCharsets.UTF_8).trim();
+            if (text.isEmpty()) return new String[0];
+            return text.split("\\R", -1);
+        } catch (IOException ignored) {
+            return new String[0];
+        }
+    }
+
+    /** One-line feature summary from a pack config (effects, dock, wallpaper). */
+    static String blurbFromConfig(JSONObject json) {
+        if (json == null) return null;
+        List<String> bits = new ArrayList<>();
+        if (json.optBoolean("dock_glass", false)) bits.add("cristal");
+        if (json.optBoolean("cinematic_home", false)) bits.add("cinematic");
+        if (json.optBoolean("advanced_effects", false)) bits.add("efectos extra");
+        if (json.optBoolean("app_glow", false)) bits.add("glow");
+        if (json.optBoolean("ambient_glow", false)) bits.add("ambiente");
+        String glow = json.optString("glow_style", "").trim();
+        if (!glow.isEmpty() && !"default".equals(glow)) bits.add("glow " + glow);
+        int dim = json.optInt("wallpaper_dim", -1);
+        if (dim == 0) bits.add("fondos al 100%");
+        else if (dim > 0) bits.add("fondos −" + dim + "%");
+        int rot = json.optInt("wallpaper_rotation_minutes", 0);
+        if (rot > 0) bits.add("rotación " + rot + " min");
+        int cols = json.optInt("columns", 0);
+        if (cols > 0) bits.add(cols + " columnas");
+        int idle = json.optInt("home_idle_clock_minutes", 0);
+        if (idle > 0) bits.add("protector " + idle + " min");
+        if (bits.isEmpty()) return null;
+        StringBuilder out = new StringBuilder();
+        for (int i = 0; i < bits.size(); i++) {
+            if (i > 0) out.append(" · ");
+            out.append(bits.get(i));
+        }
+        return out.toString();
     }
 
     static String current(Context ctx) {
@@ -200,7 +252,11 @@ final class ThemePacks {
             case "glass": return "Glass";
             case "minimal": return "Minimal";
             case "nature": return "Nature";
-            case "custom": return "Custom (mis fotos)";
+            case "custom": return "Bravia X805G";
+            case "nature-calm": return "Nature Calm";
+            case "dock-glass": return "Dock Glass";
+            case "red-rain": return "Red Rain";
+            case "six-columns": return "Six Columns";
             default: return folder;
         }
     }

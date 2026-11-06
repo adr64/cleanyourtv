@@ -8,6 +8,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Random;
+import java.util.Set;
 
 final class WallpaperRotation {
     /** Playback orders persisted in config.json (wallpaper_order). */
@@ -40,6 +41,21 @@ final class WallpaperRotation {
         return null;
     }
 
+    /**
+     * Drops filenames listed in {@code disabled}. If every picture would be removed, keeps the original
+     * list so Home / the screensaver never go blank by accident.
+     */
+    static List<File> excluding(List<File> images, Set<String> disabled) {
+        if (images == null || images.isEmpty() || disabled == null || disabled.isEmpty()) {
+            return images == null ? Collections.emptyList() : images;
+        }
+        List<File> kept = new ArrayList<>();
+        for (File image : images) {
+            if (!disabled.contains(image.getName())) kept.add(image);
+        }
+        return kept.isEmpty() ? images : kept;
+    }
+
     /** The on-TV choice (Launcher settings, Wallpaper) that turns the wallpaper off. */
     static final String CHOICE_NONE = "none";
 
@@ -47,9 +63,10 @@ final class WallpaperRotation {
      * What an on-TV wallpaper choice puts on Home in place of the theme's rotation: null when the theme decides
      * (no choice, or a picture that is no longer there), an empty list for {@link #CHOICE_NONE}, or the one picture
      * chosen from the theme's collection or its single {@code single} wallpaper.
+     * {@link Config#WALLPAPER_CHOICE_ROTATE} is handled in {@link Config#load} and returns null here.
      */
     static List<File> chosen(List<File> collection, File single, String choice) {
-        if (choice == null) return null;
+        if (choice == null || Config.WALLPAPER_CHOICE_ROTATE.equals(choice)) return null;
         if (CHOICE_NONE.equals(choice)) return Collections.emptyList();
         File picked = find(collection, choice);
         if (picked == null && single != null && choice.equals(single.getName())) picked = single;

@@ -25,6 +25,8 @@ public class ClockActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.dream_clock);
+        // Soft enter from Home (finish() already fades out the other way).
+        overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
         ClockFormat.apply(getWindow().getDecorView(), Config.load(this).clockFormat);
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN
                 | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE);
