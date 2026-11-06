@@ -94,6 +94,10 @@ final class ClockScene {
         ambient = root.findViewById(R.id.dreamAmbient);
         ambientNext = root.findViewById(R.id.dreamAmbientNext);
         SoftText.applyChildren(root.findViewById(R.id.brandMark));
+        // Same soft halo as Home labels: keeps the clock family consistent over the glass plate.
+        SoftText.apply(content.findViewById(R.id.dreamClock),
+                content.findViewById(R.id.dreamAmPm),
+                content.findViewById(R.id.dreamDate));
         glow = new GradientDrawable();
         glow.setGradientType(GradientDrawable.RADIAL_GRADIENT);
         ambient.setBackground(glow);
@@ -108,7 +112,8 @@ final class ClockScene {
         content.post(() -> {
             lockGlassToWorstCase();
             placeClock();
-            content.animate().alpha(1f).setDuration(1200).start();
+            // withLayer so SoftText's shadow fades with the digits (same as the Home hero shelf).
+            content.animate().alpha(1f).setDuration(1200).withLayer().start();
         });
         handler.removeCallbacks(tick);
         handler.postDelayed(tick, MOVE_MS);
