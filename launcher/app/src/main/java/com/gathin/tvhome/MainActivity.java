@@ -1942,7 +1942,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             fillHero(position, label);
             hero.setY(y);
             hero.setTranslationX(0f);
-            hero.animate().alpha(1f).setDuration(260).start();
+            // withLayer: SoftText's shadow must fade with the fill (plain alpha draws the halo first).
+            hero.animate().alpha(1f).setDuration(260).withLayer().start();
             if (ambientGlow) {
                 setAmbient(color);
                 ambient.animate().alpha(1f).setDuration(600).start();
@@ -1950,11 +1951,12 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             heroShown = true;
         } else if (changed) {
             if (advancedEffects) hero.animate().cancel();
-            hero.animate().alpha(0f).translationX(-12 * density).setDuration(120).withEndAction(() -> {
+            hero.animate().alpha(0f).translationX(-12 * density).setDuration(120).withLayer()
+                    .withEndAction(() -> {
                 fillHero(position, label);
                 hero.setY(y);
                 hero.setTranslationX(12 * density);
-                hero.animate().alpha(1f).translationX(0f).setDuration(200).start();
+                hero.animate().alpha(1f).translationX(0f).setDuration(200).withLayer().start();
             }).start();
             if (ambientGlow && advancedEffects) {
                 transitionAmbient(color);
@@ -1972,7 +1974,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             hero.setY(y);
             // onPause cancels the fade-ins, and a second Home during one lands on the same tile, which starts none:
             // finish them, or the shelf and the glow stay dim until focus moves to another app.
-            if (hero.getAlpha() < 1f) hero.animate().alpha(1f).setDuration(260).start();
+            if (hero.getAlpha() < 1f) hero.animate().alpha(1f).setDuration(260).withLayer().start();
             if (ambientGlow && color == ambientColor && ambient.getAlpha() < 1f) {
                 ambient.animate().alpha(1f).setDuration(600).start();
             }
@@ -2230,7 +2232,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         heroArt.animate().cancel();
         heroShown = false;
         if (animations && !reducedMotion) {
-            hero.animate().alpha(0f).setDuration(160).start();
+            hero.animate().alpha(0f).setDuration(160).withLayer().start();
             if (ambientGlow) ambient.animate().alpha(0f).setDuration(300).start();
             heroArt.animate().alpha(0f).setDuration(300).start();
         } else {

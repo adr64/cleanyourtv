@@ -256,6 +256,32 @@ final class ClockScene {
         ambient.animate().cancel();
         if (ambientNext != null) ambientNext.animate().cancel();
         wallpaperGeneration++;   // a decode still running must not attach its picture to a stopped scene
+        // Drop full-screen wallpaper bitmaps when the clock leaves: otherwise they linger in the
+        // process until GC while Home is already showing its own picture (~20 MB on a 1080p set).
+        releaseWallpaperBitmaps(ambient);
+        if (ambientNext != null) releaseWallpaperBitmaps(ambientNext);
+        wallpaperShown = false;
+    }
+
+    private static void releaseWallpaperBitmaps(ImageView view) {
+        Drawable d = view.getDrawable();
+        view.setImageDrawable(null);
+        view.setAlpha(1f);
+        recycleBitmapDrawable(d);
+    }
+
+    private static void recycleBitmapDrawable(Drawable d) {
+        if (d instanceof LayerDrawable) {
+            LayerDrawable layer = (LayerDrawable) d;
+            for (int i = 0; i < layer.getNumberOfLayers(); i++) {
+                recycleBitmapDrawable(layer.getDrawable(i));
+            }
+            return;
+        }
+        if (d instanceof BitmapDrawable) {
+            Bitmap bmp = ((BitmapDrawable) d).getBitmap();
+            if (bmp != null && !bmp.isRecycled()) bmp.recycle();
+        }
     }
 
     /**
@@ -343,10 +369,13 @@ final class ClockScene {
                 ambientNext.setAlpha(0f);
                 ambientNext.animate().alpha(1f).setDuration(CROSSFADE_MS).withEndAction(() -> {
                     if (generation != wallpaperGeneration) return;
+                    Drawable previous = ambient.getDrawable();
                     ambient.setImageDrawable(ambientNext.getDrawable());
                     ambient.setAlpha(1f);
                     ambientNext.setImageDrawable(null);
                     ambientNext.setAlpha(0f);
+                    // Previous frame is no longer on screen; free it so rotate does not stack bitmaps.
+                    if (previous != ambient.getDrawable()) recycleBitmapDrawable(previous);
                     wallpaperShown = true;
                 }).start();
             });
