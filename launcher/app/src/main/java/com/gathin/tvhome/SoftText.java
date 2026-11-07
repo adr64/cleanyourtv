@@ -6,7 +6,7 @@ import android.widget.TextView;
 
 /**
  * Soft dark halo on Home / screensaver labels so they stay readable on light wallpapers
- * without a glass plate.
+ * without a glass plate. Same blur / offset / ink as the focused dock app name.
  */
 final class SoftText {
     private SoftText() {}

@@ -411,7 +411,7 @@ class ThemePushTest(unittest.TestCase):
 
         clear = [c for c in push_commands
                  if "content delete --uri content://com.gathin.tvhome.theme/wallpapers 2>/dev/null" in c]
-        self.assertEqual(len(clear), 1, f"a push empties the collection first: {push_commands}")
+        self.assertEqual(len(clear), 1, f"a push with wallpapers/ empties the collection first: {push_commands}")
         self.assertIn(f"{DEVICE_DIR}/wallpapers/*.[jJ][pP][gG]", clear[0])
         self.assertIn(f"{DEVICE_DIR}/wallpapers/*.[wW][eE][bB][pP]", clear[0],
                       "the shell fallback clears every extension spelling the script pushes")
@@ -419,6 +419,23 @@ class ThemePushTest(unittest.TestCase):
         self.assertIn(clear[0], joined,
                       "the reset has to run the very same clear, or the two paths drift apart again")
         self.assertIn(f"content delete --uri content://com.gathin.tvhome.theme/wallpapers/captions.txt", joined)
+
+    def test_a_config_only_push_keeps_the_tvs_wallpapers(self):
+        """Pushing only config.json must not wipe pictures the owner already has on the TV."""
+        collection = self.device / "wallpapers"
+        collection.mkdir()
+        (collection / "keep-me.jpg").write_bytes(b"\xff\xd8keep")
+        (collection / "captions.txt").write_text("keep-me.jpg\tKeep\n", encoding="utf-8")
+        (self.device / "wallpaper.jpg").write_bytes(b"single")
+        # Theme folder has config only — no wallpapers/ and no wallpaper.jpg.
+        pushed = self.run_theme(str(self.theme))
+        self.assertEqual(pushed.returncode, 0, pushed.stdout + pushed.stderr)
+        self.assertEqual(sorted(p.name for p in collection.iterdir()),
+                         ["captions.txt", "keep-me.jpg"])
+        self.assertEqual((self.device / "wallpaper.jpg").read_bytes(), b"single")
+        clear = [c for c in self.shell_commands()
+                 if "content delete --uri content://com.gathin.tvhome.theme/wallpapers 2>/dev/null" in c]
+        self.assertEqual(clear, [], f"config-only push must not clear wallpapers/: {self.shell_commands()}")
 
     def test_the_windows_script_clears_the_collection_on_reset(self):
         """theme.ps1 cannot run here, so the -Reset branch is pinned as text against theme.sh."""

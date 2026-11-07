@@ -109,7 +109,9 @@ del() { echo "rm -f $DIR/$1 2>/dev/null; content delete --uri $URI/$1 2>/dev/nul
 # The collection a theme can push. A push empties it before writing the theme's own pictures, and --reset has to
 # empty it too: the launcher's wallpaper picker (LauncherSettingsActivity.showWallpaperPicker) lists that folder
 # itself, and an on-TV pick of one of its pictures is read back from it (WallpaperRotation.chosen), so a reset
-# that left the pictures behind still shows the theme it just removed. Both paths use this one string.
+# that left the pictures behind still shows the theme it just removed. A push that includes wallpapers/
+# empties the collection before writing; a config-only push (no wallpapers/ folder) leaves pictures alone.
+# Both paths that clear use this one string.
 CLEAR_WALLPAPERS="rm -f $DIR/wallpapers/*.[jJ][pP][gG] $DIR/wallpapers/*.[jJ][pP][eE][gG] $DIR/wallpapers/*.[pP][nN][gG] $DIR/wallpapers/*.[wW][eE][bB][pP] 2>/dev/null; content delete --uri $URI/wallpapers 2>/dev/null"
 
 if [ "${1:-}" = --reset ]; then
@@ -171,23 +173,28 @@ fi
 tv "mkdir -p $DIR" >/dev/null 2>&1 || true
 tv --push "$THEME/config.json" "$TMP-config.json" >/dev/null
 tv "$(put config.json)"
+# A folder with wallpapers/ replaces the TV's collection. A config-only push (no wallpapers/) leaves
+# pictures, captions, wallpaper.jpg and the owner's picks alone so Home and the screensaver keep working.
+HAS_COLLECTION=0
+[ -d "$THEME/wallpapers" ] && HAS_COLLECTION=1
 if [ -f "$THEME/wallpaper.jpg" ]; then
   "$PY" -I b64push.py "$THEME/wallpaper.jpg" "$TMP-wallpaper.jpg"
   tv "$(put wallpaper.jpg)"
-else
+elif [ "$HAS_COLLECTION" -eq 1 ]; then
   tv "$(del wallpaper.jpg)" >/dev/null
 fi
-tv "$CLEAR_WALLPAPERS" >/dev/null
-for NAME in $NAMES; do
-  "$PY" -I b64push.py "$THEME/wallpapers/$NAME" "$(stage "wallpapers/$NAME")"
-  tv "$(put "wallpapers/$NAME")" >/dev/null
-done
-# The collection's names (wallpaper_captions); a theme without them leaves no stale names behind.
-if [ -f "$THEME/wallpapers/captions.txt" ]; then
-  "$PY" -I b64push.py "$THEME/wallpapers/captions.txt" "$(stage wallpapers/captions.txt)"
-  tv "$(put wallpapers/captions.txt)" >/dev/null
-else
-  tv "$(del wallpapers/captions.txt)" >/dev/null
+if [ "$HAS_COLLECTION" -eq 1 ]; then
+  tv "$CLEAR_WALLPAPERS" >/dev/null
+  for NAME in $NAMES; do
+    "$PY" -I b64push.py "$THEME/wallpapers/$NAME" "$(stage "wallpapers/$NAME")"
+    tv "$(put "wallpapers/$NAME")" >/dev/null
+  done
+  if [ -f "$THEME/wallpapers/captions.txt" ]; then
+    "$PY" -I b64push.py "$THEME/wallpapers/captions.txt" "$(stage wallpapers/captions.txt)"
+    tv "$(put wallpapers/captions.txt)" >/dev/null
+  else
+    tv "$(del wallpapers/captions.txt)" >/dev/null
+  fi
 fi
 tv "printf '%s' '$REVISION' > $TMP-theme_revision; $(put theme_revision)" >/dev/null
 "$PY" -I theme_restart.py

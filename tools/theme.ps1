@@ -78,10 +78,10 @@ function Stage($name) { "$tmp-$($name -replace '/', '-')" }
 function Put($name) { $t = Stage $name; $d = "$dir/$name" -replace '/[^/]*$', ''; "rm -f $dir/$name 2>/dev/null; { o=`$(content write --uri $uri/$name < $t 2>&1) && case `"`$o`" in *'Unsupported operation'*|*'Error while accessing provider'*) false ;; esac; } || { mkdir -p $d 2>/dev/null; cp $t $dir/$name 2>/dev/null; }; rm -f $t" }
 function Drop($name) { "rm -f $dir/$name 2>/dev/null; content delete --uri $uri/$name 2>/dev/null" }
 
-# The collection a theme can push. A push empties it before writing the theme's own pictures, and -Reset has to
-# empty it too: the launcher's wallpaper picker lists that folder itself, and an on-TV pick of one of its
-# pictures is read back from it, so a reset that left the pictures behind still shows the theme it just removed.
-# Both paths use this one string (the same one theme.sh has).
+# The collection a theme can push. A push that includes wallpapers/ empties it before writing the theme's own
+# pictures; a config-only push (no wallpapers/ folder) leaves the TV's pictures and the owner's picks alone.
+# -Reset always empties it: the launcher's wallpaper picker lists that folder itself. Both paths that clear
+# use this one string (the same one theme.sh has).
 $clearWallpapers = "rm -f $dir/wallpapers/*.[jJ][pP][gG] $dir/wallpapers/*.[jJ][pP][eE][gG] $dir/wallpapers/*.[pP][nN][gG] $dir/wallpapers/*.[wW][eE][bB][pP] 2>/dev/null; content delete --uri $uri/wallpapers 2>/dev/null"
 
 if ($Reset) {
@@ -129,20 +129,29 @@ if (Test-Path $wallpapers -PathType Container) {
 Invoke-Tv tv.py "mkdir -p $dir 2>/dev/null; true" | Out-Null
 Invoke-Tv tv.py --push $config "$tmp-config.json" | Out-Null
 Invoke-Tv tv.py (Put 'config.json')
+# A folder with wallpapers/ replaces the TV's collection. A config-only push (no wallpapers/) leaves
+# pictures, captions, wallpaper.jpg and the owner's picks alone so Home and the screensaver keep working.
+$hasCollection = Test-Path $wallpapers -PathType Container
 $wall = Join-Path $Theme 'wallpaper.jpg'
-if (Test-Path $wall) { Invoke-Tv b64push.py $wall "$tmp-wallpaper.jpg"; Invoke-Tv tv.py (Put 'wallpaper.jpg') } else { Invoke-Tv tv.py (Drop 'wallpaper.jpg') | Out-Null }
-Invoke-Tv tv.py $clearWallpapers | Out-Null
-foreach ($image in $images) {
-    Invoke-Tv b64push.py $image.FullName (Stage "wallpapers/$($image.Name)")
-    Invoke-Tv tv.py (Put "wallpapers/$($image.Name)") | Out-Null
+if (Test-Path $wall) {
+    Invoke-Tv b64push.py $wall "$tmp-wallpaper.jpg"
+    Invoke-Tv tv.py (Put 'wallpaper.jpg')
+} elseif ($hasCollection) {
+    Invoke-Tv tv.py (Drop 'wallpaper.jpg') | Out-Null
 }
-# The collection's names (wallpaper_captions); a theme without them leaves no stale names behind.
-$captions = Join-Path $Theme 'wallpapers\captions.txt'
-if (Test-Path $captions -PathType Leaf) {
-    Invoke-Tv b64push.py $captions (Stage 'wallpapers/captions.txt')
-    Invoke-Tv tv.py (Put 'wallpapers/captions.txt') | Out-Null
-} else {
-    Invoke-Tv tv.py (Drop 'wallpapers/captions.txt') | Out-Null
+if ($hasCollection) {
+    Invoke-Tv tv.py $clearWallpapers | Out-Null
+    foreach ($image in $images) {
+        Invoke-Tv b64push.py $image.FullName (Stage "wallpapers/$($image.Name)")
+        Invoke-Tv tv.py (Put "wallpapers/$($image.Name)") | Out-Null
+    }
+    $captions = Join-Path $Theme 'wallpapers\captions.txt'
+    if (Test-Path $captions -PathType Leaf) {
+        Invoke-Tv b64push.py $captions (Stage 'wallpapers/captions.txt')
+        Invoke-Tv tv.py (Put 'wallpapers/captions.txt') | Out-Null
+    } else {
+        Invoke-Tv tv.py (Drop 'wallpapers/captions.txt') | Out-Null
+    }
 }
 Invoke-Tv tv.py "printf '%s' '$revision' > $tmp-theme_revision; $(Put 'theme_revision')" | Out-Null
 & $py -I theme_restart.py

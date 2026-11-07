@@ -17,8 +17,10 @@ screenshot, and `manage.py set <switch> <value> --theme <your folder>` writes a 
 and pushes it with `theme.sh` (`theme.ps1` on Windows). The folder has to be outside this checkout: one under `themes/` or `examples/` is
 refused (copy a theme first), a `config.json` it cannot read is named before anything is written or pushed, and a
 folder that is not there is refused too rather than made - an empty folder of your own is fine, `set` starts the
-`config.json` in it. Pushing replaces the theme on the TV and empties the pictures it pushed before, so a mistyped
-path would leave a one-key theme behind.
+`config.json` in it. A push that includes a `wallpapers/` folder replaces that collection on the TV; a config-only
+push (no `wallpapers/` folder) updates `config.json` and leaves the pictures, captions and the owner's wallpaper
+picks alone. `--reset` clears the collection. A mistyped path that still has no pictures would leave a one-key
+theme behind without wiping walls already on the TV.
 
 On Windows, the manager's theme operations need no Bash: they use `pwsh`, or `powershell` if `pwsh` is not on
 PATH, without loading profiles or changing execution policy. If the computer's policy blocks scripts, the
@@ -135,6 +137,7 @@ A new key needs one there in the same pull request.
 | `focus_overshoot` | bool | The highlight and the focused tile swing past their target before settling (`true` by default); `false` glides straight there with smooth scrolling |
 | `vpn_app` | string | App the network pill opens when a VPN is configured; also shows a red "VPN off" badge while no VPN is up |
 | `vpn_pill` | bool | The VPN as its own pill after the network pill instead of a badge inside it: solid green while a VPN is up, solid red "VPN off" while none is and `vpn_app` is installed, hidden otherwise. Pressing it opens `vpn_app` (without it, the App library, or VPN settings with `app_library` off); it keeps its label with `icon_only_buttons`; the network pill then opens Wi-Fi settings. Ignored with `top_menu`. A VPN app's kill switch holds a VPN up while the app says disconnected, so the pill stays green then (`false` by default) |
+| `now_playing_pill` | bool | Top-bar pill to the left of Inputs while another app is playing media: equalizer icon and that app's name; OK opens a short menu (Open / Close). Reads MediaSession only while Home is in front; needs `GuardRevival` allowed as a notification listener (`cmd notification allow_listener com.gathin.tvhome/.GuardRevival`); no album art (`false` by default) |
 | `icon_only_vpn` | bool | With `vpn_pill`, the VPN pill as a round icon button too, matching `icon_only_buttons`: an open lock on the plain glass button while no VPN is up, the closed lock in a green outline while one is, solid green only while focused, like the pill; "VPN" / "VPN off" become its TalkBack description (`false` by default) |
 | `animations` | bool | Basic focus, glass, title and tile entrance motion; true by default |
 | `advanced_effects` | bool | Optional lifted tile, icon zoom, smooth ambient colour and app opening effects; false by default |

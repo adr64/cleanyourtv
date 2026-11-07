@@ -12,7 +12,8 @@ import android.service.notification.NotificationListenerService;
  *
  * A notification listener keeps its approval across a force stop, and the system binds it again
  * once the process is gone. That rebind is what brings Home back on TCL and Xiaomi. No notification
- * is read. Enable with {@code cmd notification allow_listener com.gathin.tvhome/.GuardRevival}.
+ * is read (now_playing_pill only asks MediaSessionManager for active sessions through this component).
+ * Enable with {@code cmd notification allow_listener com.gathin.tvhome/.GuardRevival}.
  */
 public class GuardRevival extends NotificationListenerService {
     private BroadcastReceiver unlocked;

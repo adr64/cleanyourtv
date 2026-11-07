@@ -29,6 +29,8 @@ import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
+import android.media.AudioManager;
+import android.media.session.MediaSessionManager;
 import android.media.tv.TvContract;
 import android.media.tv.TvInputInfo;
 import android.media.tv.TvInputManager;
@@ -224,6 +226,38 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     /** vpn_pill: the VPN shown as its own pill (btnVpn) instead of a badge in the network pill. Off with top_menu. */
     private boolean vpnPill;
     private TextView btnVpn;
+    /** now_playing_pill: top-bar pill while another app is actively playing media. */
+    private boolean nowPlayingPill;
+    private TextView btnNowPlaying;
+    /** Package shown on btnNowPlaying, or null while the pill is hidden. */
+    private String nowPlayingPackage;
+    /** Registered only while Home is resumed and now_playing_pill is on. */
+    private MediaSessionManager.OnActiveSessionsChangedListener nowPlayingListener;
+    /** Equalizer frames for the now-playing pill (AnimationDrawable stays still under drawableTint). */
+    private static final int[] NOW_PLAYING_EQ = {
+            R.drawable.ic_eq_1, R.drawable.ic_eq_2, R.drawable.ic_eq_3, R.drawable.ic_eq_2};
+    /** Same ink as pill_text.xml: black on the white focus pill, white at rest. */
+    private static final ColorStateList NOW_PLAYING_EQ_FOCUSED = ColorStateList.valueOf(0xFF111111);
+    private static final ColorStateList NOW_PLAYING_EQ_REST = ColorStateList.valueOf(0xFFFFFFFF);
+    private int nowPlayingEqFrame;
+    private boolean nowPlayingEqRunning;
+    private final Runnable nowPlayingEqTick = new Runnable() {
+        @Override
+        public void run() {
+            if (!nowPlayingEqRunning || !nowPlayingPill || btnNowPlaying == null
+                    || btnNowPlaying.getVisibility() != View.VISIBLE) {
+                nowPlayingEqRunning = false;
+                return;
+            }
+            btnNowPlaying.setCompoundDrawablesRelativeWithIntrinsicBounds(
+                    NOW_PLAYING_EQ[nowPlayingEqFrame], 0, 0, 0);
+            // Explicit focus colour: a selector ColorStateList was left white after each frame swap.
+            btnNowPlaying.setCompoundDrawableTintList(
+                    btnNowPlaying.hasFocus() ? NOW_PLAYING_EQ_FOCUSED : NOW_PLAYING_EQ_REST);
+            nowPlayingEqFrame = (nowPlayingEqFrame + 1) % NOW_PLAYING_EQ.length;
+            handler.postDelayed(this, 110);
+        }
+    };
     /** The VpnBadge pill state btnVpn shows, so a refresh that changes nothing does not restyle it. */
     private int vpnPillState = VpnBadge.PILL_HIDDEN;
     /** icon_only_vpn: the VPN pill is a round lock button; off, it keeps the plain glass look saved here. */
@@ -547,6 +581,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 findViewById(R.id.clock), findViewById(R.id.ampm), findViewById(R.id.date),
                 findViewById(R.id.shamsiDate), findViewById(R.id.lunarDate));
         SoftText.applyChildren(findViewById(R.id.brandMark));
+        // Same halo on top-bar pills (Spotify / Inputs / Wi-Fi / Settings): text and compound icons.
+        SoftText.applyChildren(findViewById(R.id.topButtons));
         greetingColor = greeting.getCurrentTextColor();
         if (!cfg.showGreeting) greeting.setVisibility(View.GONE);
         // Keep the other header layouts as designed: their extra lines change the block's centre.
@@ -612,6 +648,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         vpnApp = cfg.vpnApp;
         vpnPill = cfg.vpnPill && !cfg.topMenu;
         btnVpn = findViewById(R.id.btnVpn);
+        nowPlayingPill = cfg.nowPlayingPill;
+        btnNowPlaying = findViewById(R.id.btnNowPlaying);
         moduleCards = cfg.moduleCards;
         hiddenApps = new HashSet<>(cfg.hiddenApps);
         libraryExcludedApps = new HashSet<>(cfg.libraryExcludedApps);
@@ -825,6 +863,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         btnInputs.setOnClickListener(v -> showInputs());
         btnWifi.setOnClickListener(v -> openNetworkPill());
         btnVpn.setOnClickListener(v -> openVpnPill());
+        btnNowPlaying.setOnClickListener(v -> showNowPlayingMenu());
         btnWifi.setOnLongClickListener(v -> {
             open(systemIntent(Settings.ACTION_WIFI_SETTINGS));
             return true;
@@ -908,7 +947,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 focusTile(singleRow ? lastFocused : lastFocused % COLUMNS);
                 return true;
             }
-            int firstButton = btnInputs.getVisibility() == View.VISIBLE ? R.id.btnInputs : firstTopButton().getId();
+            // now_playing_pill sits left of Inputs (LTR); treat it as the bar end when it is showing.
+            int firstButton = leftmostPillId();
             int leftButton = rtlMenuBar ? R.id.btnSettings : firstButton;
             int rightButton = rtlMenuBar ? firstButton : R.id.btnSettings;
             if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) return v.getId() == leftButton;
@@ -917,12 +957,13 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         btnInputs.setOnKeyListener(pillKeys);
         btnWifi.setOnKeyListener(pillKeys);
         btnVpn.setOnKeyListener(pillKeys);
+        btnNowPlaying.setOnKeyListener(pillKeys);
         btnSettings.setOnKeyListener(pillKeys);
         btnReorder.setOnKeyListener(pillKeys);
         btnLibraryTop.setOnKeyListener(pillKeys);
         for (View button : topAppButtons) button.setOnKeyListener(pillKeys);
         if (advancedEffects) {
-            List<View> pills = new ArrayList<>(Arrays.asList(btnInputs, btnWifi, btnVpn, btnReorder, btnLibraryTop, btnSettings));
+            List<View> pills = new ArrayList<>(Arrays.asList(btnNowPlaying, btnInputs, btnWifi, btnVpn, btnReorder, btnLibraryTop, btnSettings));
             pills.addAll(topAppButtons);
             for (View button : pills) {
                 button.setOnFocusChangeListener((view, focused) -> view.animate()
@@ -931,6 +972,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             }
         }
         if (festive) applyFestiveSkin((TextView) btnInputs, (TextView) btnSettings);
+        // Soft halo again after gear / festive / icon-only swaps replace the XML drawables.
+        SoftText.applyChildren(findViewById(R.id.topButtons));
 
         // Hide the glass when focus leaves the tiles.
         getWindow().getDecorView().getViewTreeObserver().addOnGlobalFocusChangeListener((oldF, newF) -> {
@@ -1136,6 +1179,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             pillsShown = true;
         }
         if (showStats) startStats();
+        startNowPlayingWatch();
         if (gameDay != null) gameDay.start();
         sky.update();
         wallpaperPlayer.start();
@@ -1321,6 +1365,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         handler.removeCallbacks(openWhenOnline);
         startPending = null;   // leaving Home before the network came back: the boot's app stays closed
         stopStats();
+        stopNowPlayingWatch();
         if (gameDay != null) gameDay.stop();
         handler.removeCallbacks(turnTick);
         if (lamp != null) lamp.stop();
@@ -2293,6 +2338,111 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (!showStats) stats.setVisibility(View.GONE);
     }
 
+    // ---- optional now-playing pill (config.xml now_playing_pill) ----------------------------------
+
+    private void startNowPlayingWatch() {
+        if (!nowPlayingPill || nowPlayingListener != null) return;
+        MediaSessionManager mgr = getSystemService(MediaSessionManager.class);
+        if (mgr == null) return;
+        ComponentName listener = new ComponentName(this, GuardRevival.class);
+        nowPlayingListener = controllers -> handler.post(() -> {
+            if (!resumed || isDestroyed()) return;
+            refreshNowPlaying();
+        });
+        try {
+            mgr.addOnActiveSessionsChangedListener(nowPlayingListener, listener);
+        } catch (SecurityException e) {
+            nowPlayingListener = null;
+            return;
+        }
+        refreshNowPlaying();
+    }
+
+    private void stopNowPlayingWatch() {
+        if (nowPlayingListener == null) return;
+        MediaSessionManager mgr = getSystemService(MediaSessionManager.class);
+        if (mgr != null) mgr.removeOnActiveSessionsChangedListener(nowPlayingListener);
+        nowPlayingListener = null;
+        stopNowPlayingEq();
+    }
+
+    private void refreshNowPlaying() {
+        if (!nowPlayingPill || btnNowPlaying == null) return;
+        String pkg = NowPlaying.pickPackage(NowPlaying.fromManager(this), getPackageName());
+        if (pkg == null) {
+            if (btnNowPlaying.getVisibility() == View.GONE) return;
+            boolean focused = btnNowPlaying.hasFocus();
+            nowPlayingPackage = null;
+            stopNowPlayingEq();
+            btnNowPlaying.setVisibility(View.GONE);
+            if (focused) (btnInputs.getVisibility() == View.VISIBLE ? btnInputs
+                    : btnWifi.getVisibility() == View.VISIBLE ? btnWifi : firstTopButton()).requestFocus();
+            return;
+        }
+        if (pkg.equals(nowPlayingPackage) && btnNowPlaying.getVisibility() == View.VISIBLE) {
+            startNowPlayingEq(); // keep bars moving if a tick was dropped
+            return;
+        }
+        nowPlayingPackage = pkg;
+        String label = NowPlaying.label(getPackageManager(), pkg);
+        btnNowPlaying.setText(label);
+        btnNowPlaying.setContentDescription(getString(R.string.now_playing_menu, label));
+        btnNowPlaying.setVisibility(View.VISIBLE);
+        startNowPlayingEq();
+    }
+
+    /** Leftmost top-bar pill id: now-playing when shown, else Inputs, else the first visible top button. */
+    private int leftmostPillId() {
+        if (btnNowPlaying != null && btnNowPlaying.getVisibility() == View.VISIBLE) return R.id.btnNowPlaying;
+        if (btnInputs != null && btnInputs.getVisibility() == View.VISIBLE) return R.id.btnInputs;
+        return firstTopButton().getId();
+    }
+
+    private void startNowPlayingEq() {
+        if (nowPlayingEqRunning) return;
+        nowPlayingEqRunning = true;
+        nowPlayingEqFrame = 0;
+        // drawableTint on TopButton freezes AnimationDrawable; cycle the bar frames by hand instead.
+        handler.post(nowPlayingEqTick);
+    }
+
+    private void stopNowPlayingEq() {
+        nowPlayingEqRunning = false;
+        handler.removeCallbacks(nowPlayingEqTick);
+        if (btnNowPlaying != null) {
+            btnNowPlaying.setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_eq_1, 0, 0, 0);
+            btnNowPlaying.setCompoundDrawableTintList(
+                    btnNowPlaying.hasFocus() ? NOW_PLAYING_EQ_FOCUSED : NOW_PLAYING_EQ_REST);
+        }
+    }
+
+    /** Same pattern as the Settings gear: OK opens Abrir / Cerrar under the pill. */
+    private void showNowPlayingMenu() {
+        if (nowPlayingPackage == null) return;
+        View panel = getLayoutInflater().inflate(R.layout.popup_inputs, root, false);
+        LinearLayout rows = panel.findViewById(R.id.rows);
+        PopupWindow popup = glassPopup(panel, (int) (200 * density));
+        addSettingsMenuRow(rows, popup, R.string.now_playing_open, this::openNowPlayingApp);
+        addSettingsMenuRow(rows, popup, R.string.now_playing_close, this::closeNowPlaying);
+        panel.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
+        popup.setWidth(Math.max((int) (200 * density), panel.getMeasuredWidth()));
+        dropIn(popup, panel, btnNowPlaying, getResources().getBoolean(R.bool.rtl_menu_bar)
+                ? Gravity.END : Gravity.START);
+        rows.getChildAt(0).requestFocus();
+    }
+
+    private void closeNowPlaying() {
+        NowPlaying.pause(getSystemService(AudioManager.class));
+        handler.postDelayed(this::refreshNowPlaying, 400);
+    }
+
+    private void openNowPlayingApp() {
+        if (nowPlayingPackage == null) return;
+        Intent launch = getPackageManager().getLeanbackLaunchIntentForPackage(nowPlayingPackage);
+        if (launch == null) launch = getPackageManager().getLaunchIntentForPackage(nowPlayingPackage);
+        if (launch != null) open(launch);
+    }
+
     /** One quiet line, e.g. "CPU 8%  ·  Memory 430 MB free  ·  Storage 3.1 GB free". Runs off the main thread. */
     private static void appendStat(StringBuilder line, String part) {
         if (line.length() > 0) line.append("  ·  ");
@@ -2605,6 +2755,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             logo.setBounds(0, 0, size, size);
             button.setCompoundDrawablesRelative(logo, null, null, null);
             button.setCompoundDrawableTintList(null);
+            SoftText.apply(button);
             button.setContentDescription(label);
             Intent target = launch;
             button.setOnClickListener(v -> open(new Intent(target)));
