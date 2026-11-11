@@ -2585,26 +2585,29 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         int count = adapter.appCount();
         int target;
         if (singleRow) {
-            // One row: Up leaves for the top bar, Down has nowhere to go, and Left/Right walk the whole row,
-            // stopping at its two ends (the default focus search scrolls the row to the next tile).
+            // One row: Up leaves for the top bar, Down reaches the App library pill, and Left/Right walk
+            // the row and stop at its ends (Right never jumps to the library).
             if (keyCode == KeyEvent.KEYCODE_DPAD_UP) return false;
-            if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) return true;
+            if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+                if (adapter.isLibraryAt(count)) {
+                    focusLibrary();
+                    // Hand-moved focus skips the system click; match the rest of the grid.
+                    grid.playSoundEffect(SoundEffectConstants.NAVIGATION_DOWN);
+                }
+                return true;
+            }
             boolean forward = rtlAppGrid ? keyCode == KeyEvent.KEYCODE_DPAD_LEFT : keyCode == KeyEvent.KEYCODE_DPAD_RIGHT;
             int last = adapter.focusablePosition(count - 1);
-            if (forward && position >= last) {
-                if (adapter.isLibraryAt(count)) focusLibrary();
-                return true;
-            }
+            if (forward && position >= last) return true;
             return !forward && position == 0;
         }
-        // Horizontal: swallow the key at a row's ends so focus never wraps to the next row or
-        // escapes up into the top bar. Mid-row moves fall through to the default focus search.
+        // Horizontal: swallow the key at a row's ends so focus never wraps to the next row,
+        // escapes up into the top bar, or jumps sideways into the App library. Mid-row moves
+        // fall through to the default focus search; Down from the last apps row opens the library.
         if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
             boolean forward = rtlAppGrid ? keyCode == KeyEvent.KEYCODE_DPAD_LEFT : keyCode == KeyEvent.KEYCODE_DPAD_RIGHT;
-            if (forward && position == adapter.focusablePosition(count - 1) && adapter.isLibraryAt(count)) {
-                focusLibrary();
-                return true;
-            }
+            // Last regular app: stay put. The App library is only reached with Down.
+            if (forward && position == adapter.focusablePosition(count - 1)) return true;
             // In the dock, the last app is the row's end: the empty slots after it take no focus.
             int rowCount = position < COLUMNS ? Math.min(count, adapter.dockFilled()) : count;
             return GridNavigation.atHorizontalEdge(position, rowCount, COLUMNS,
@@ -2616,7 +2619,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         } else {
             int lastRowStart = ((count - 1) / COLUMNS) * COLUMNS;
             if (position >= lastRowStart) {
-                if (adapter.isLibraryAt(count)) focusLibrary();
+                if (adapter.isLibraryAt(count)) {
+                    focusLibrary();
+                    // Hand-moved focus skips the system click; match Up/Down between app tiles.
+                    grid.playSoundEffect(SoundEffectConstants.NAVIGATION_DOWN);
+                }
                 return true;
             }
             target = Math.min(position + COLUMNS, count - 1);
@@ -2766,9 +2773,15 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     }
 
     @Override public void onLibraryUp() {
-        if (adapter.appCount() == 0) { firstTopButton().requestFocus(); return; }
+        if (adapter.appCount() == 0) {
+            firstTopButton().requestFocus();
+            grid.playSoundEffect(SoundEffectConstants.NAVIGATION_UP);
+            return;
+        }
         int lastRow = ((adapter.appCount() - 1) / COLUMNS) * COLUMNS;
         focusTile(Math.min(lastRow + lastFocused % COLUMNS, adapter.appCount() - 1));
+        // Same as tile Up/Down: the library pill swallows keys, so click here.
+        grid.playSoundEffect(SoundEffectConstants.NAVIGATION_UP);
     }
 
     private void focusLibrary() {
